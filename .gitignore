@@ -1,0 +1,8 @@
+/target/
+/sdk/
+/local-config/
+/settings.json
+.env
+.env.*
+__pycache__/
+*.pyc

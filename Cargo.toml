@@ -1,0 +1,28 @@
+[package]
+name = "camera-control"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+repository = "https://github.com/NautiluX/camera-control"
+description = "Linux camera color controls and settings watcher, built with Iced"
+
+[dependencies]
+iced = { version = "=0.14.0", default-features = false, features = ["wgpu", "tiny-skia", "x11", "wayland", "tokio", "fira-sans", "image-without-codecs"] }
+# Explicit image allocation without enabling unused image-file codecs.
+iced_runtime = "=0.14.0"
+ksni = { version = "0.3.7", features = ["blocking"] }
+libc = "0.2"
+v4l = "0.14"
+jpeg-decoder = { version = "0.3", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.dev]
+debug = 0
+
+# Keep the preview path responsive in local builds as well as releases.
+[profile.dev.package.camera-control]
+opt-level = 2
+
+[profile.dev.package.jpeg-decoder]
+opt-level = 3
