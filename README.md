@@ -76,6 +76,20 @@ updates grouped to reduce PR noise. Patch and minor updates merge automatically
 only after the required **Rust checks** succeeds. Major updates and failing updates
 remain open for review. Security update PRs follow the same merge policy.
 
+## Releases
+
+[Download the latest release](https://github.com/NautiluX/camera-control/releases/latest).
+The Linux x86_64 archive includes the executable, installer and license notices;
+it requires glibc 2.39 or newer (Ubuntu 24.04 or equivalent).
+
+The Release workflow runs every Monday at 09:00 UTC and publishes automatically
+when `main` has changed since the previous release. It can also be run manually
+from GitHub Actions. Every release passes formatting, lint and tests before
+publication. The first version uses the Cargo package version; subsequent releases
+increment the patch version unless main specifies a higher version. Version
+stamping is committed only to the release tag, leaving main unchanged. No release
+is created when the source tree is unchanged. SHA-256 checksums accompany downloads.
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).

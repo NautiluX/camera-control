@@ -18,6 +18,10 @@ use worker::{Command, Event, Worker};
 
 fn main() -> iced::Result {
     match std::env::args().nth(1).as_deref() {
+        Some("--version") | Some("-V") => {
+            println!("Camera Control {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
         Some("--list") => {
             for camera in camera::discover() {
                 println!("{}\n  {}", camera.name, camera.path.display());

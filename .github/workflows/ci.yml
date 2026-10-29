@@ -46,4 +46,6 @@ jobs:
       - name: Build application
         run: cargo build --locked
       - name: Check installer syntax
-        run: python3 -m py_compile install.py
+        run: |
+          python3 -m py_compile install.py .github/scripts/release.py
+          python3 -m unittest discover -s .github/scripts -p "test_*.py"
