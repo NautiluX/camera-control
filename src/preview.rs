@@ -348,7 +348,7 @@ fn decode_jpeg(bytes: &[u8]) -> io::Result<(u32, u32, Vec<u8>)> {
     let mut rgba = Vec::with_capacity(info.width as usize * info.height as usize * 4);
     match info.pixel_format {
         jpeg_decoder::PixelFormat::RGB24 => {
-            for rgb in pixels.chunks_exact(3) {
+            for rgb in pixels.as_chunks::<3>().0 {
                 rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
             }
         }
@@ -374,7 +374,7 @@ fn decode_yuyv(bytes: &[u8], width: u32, height: u32, stride: u32) -> io::Result
     }
     let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
     for row in bytes.chunks_exact(stride).take(height as usize) {
-        for pair in row[..row_size].chunks_exact(4) {
+        for pair in row[..row_size].as_chunks::<4>().0 {
             let u = i32::from(pair[1]) - 128;
             let v = i32::from(pair[3]) - 128;
             for y in [pair[0], pair[2]] {
