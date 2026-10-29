@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 NautiluX
+
 //! Standard Linux V4L2 controls. SDK-specific features belong in a separate adapter.
 use std::{
     collections::{BTreeMap, BTreeSet},

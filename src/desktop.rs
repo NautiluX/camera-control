@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 NautiluX
+
 //! Linux desktop integration: session startup, single instance, and tray.
 use ksni::blocking::TrayMethods;
 use std::{

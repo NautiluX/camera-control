@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 NautiluX
+
 use crate::{
     App, Message,
     camera::{AUTO_WB, BRIGHTNESS, CONTRAST, Control, SATURATION, TEMPERATURE},

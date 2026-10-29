@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 NautiluX
+
 """Install a locally built executable, launcher and optional login startup entry."""
 import argparse
 import os

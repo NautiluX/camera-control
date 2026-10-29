@@ -2,6 +2,7 @@
 name = "camera-control"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 rust-version = "1.93"
 repository = "https://github.com/NautiluX/camera-control"
 description = "Linux camera color controls and settings watcher, built with Iced"

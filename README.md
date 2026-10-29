@@ -64,3 +64,18 @@ No vendor headers or binaries are included. Keep any future OBSBOT SDK outside t
 ## Design references
 
 Preset temperatures are approximate starting points. Daylight uses 5500 K. Camera manufacturers use somewhat different values; see [Nikon's white-balance explanation](https://www.nikonusa.com/learn-and-explore/c/tips-and-techniques/setting-white-balance) and [OBSBOT's Lite Mode overview](https://www.obsbot.com/news/all-new-lite-mode-for-obsbot-center) for the lighting concepts and grouping of common controls.
+
+## Dependency maintenance
+
+GitHub Actions checks formatting, lint, tests, the application build, and installer
+syntax on every pull request and push to `main`. Camera hardware is not needed;
+the explicit hardware test remains opt-in.
+
+Dependabot checks Rust dependencies and GitHub Actions weekly, with compatible
+updates grouped to reduce PR noise. Patch and minor updates merge automatically
+only after the required **Rust checks** succeeds. Major updates and failing updates
+remain open for review. Security update PRs follow the same merge policy.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 NautiluX
+
 //! Optional native V4L2 capture. The latest frame replaces its predecessor so a
 //! slow UI cannot create an unbounded queue of images.
 use iced::widget::image::Handle;

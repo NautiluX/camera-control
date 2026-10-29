@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 NautiluX
+
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, env, fs, io, path::PathBuf};
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
