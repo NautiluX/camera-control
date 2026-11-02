@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "camera-control"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "iced",
  "iced_runtime",
