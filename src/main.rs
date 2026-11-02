@@ -62,7 +62,7 @@ fn main() -> iced::Result {
         }
         Some("--help") | Some("-h") => {
             println!(
-                "Camera Control\n\n  camera-control           Open the Iced interface\n  camera-control --list    List cameras and read controls without changing them\n  camera-control --watch   Enforce saved enabled profiles without a window\n\nNo OBSBOT SDK is required for standard color controls."
+                "Camera Control\n\n  camera-control           Open the Iced interface\n  camera-control --background  Start in the tray\n  camera-control --list    List cameras and read controls without changing them\n  camera-control --watch   Enforce saved enabled profiles without a window\n\nNo OBSBOT SDK is required for standard color controls."
             );
             return Ok(());
         }
@@ -105,6 +105,7 @@ enum Message {
     PreviewFrameRate(u32),
     PreviewMirror(bool),
     StartAtLogin(bool),
+    StartMinimized(bool),
     Hide,
     Quit,
     CloseRequested(window::Id),
@@ -147,7 +148,7 @@ impl App {
             return (app, iced::exit());
         }
         let background = std::env::args().any(|argument| argument == "--background");
-        let task = if background && app.tray.is_some() {
+        let task = if (background || app.settings.start_minimized) && app.tray.is_some() {
             Task::none()
         } else {
             app.show()
@@ -234,7 +235,8 @@ impl App {
             ),
         };
         let (desktop_tx, desktop_events) = mpsc::channel();
-        let background = std::env::args().any(|argument| argument == "--background");
+        let background = std::env::args()
+            .any(|argument| argument == "--background" || argument == "--autostart");
         let (instance, duplicate, mut desktop_error) =
             match desktop::Instance::acquire(desktop_tx.clone(), background) {
                 Ok(Some(instance)) => (Some(instance), false, None),
@@ -449,6 +451,19 @@ impl App {
                     }
                     self.persist();
                 }
+            }
+            Message::StartMinimized(enabled) => {
+                // Refresh legacy login entries that forced --background, so this
+                // preference controls login startup as well as ordinary launches.
+                if self.start_at_login
+                    && let Err(error) = desktop::set_start_at_login(true)
+                {
+                    self.desktop_error =
+                        Some(format!("Could not update startup settings: {error}"));
+                    return Task::none();
+                }
+                self.settings.start_minimized = enabled;
+                self.persist();
             }
             Message::StartAtLogin(enabled) => match desktop::set_start_at_login(enabled) {
                 Ok(()) => {

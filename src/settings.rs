@@ -12,6 +12,8 @@ pub struct Profile {
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Settings {
+    #[serde(default)]
+    pub start_minimized: bool,
     pub selected: Option<PathBuf>,
     pub cameras: BTreeMap<PathBuf, Profile>,
 }
@@ -45,6 +47,18 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn startup_preference_is_backward_compatible_and_persisted() {
+        let old: Settings = serde_json::from_str(r#"{"selected":null,"cameras":{}}"#).unwrap();
+        assert!(!old.start_minimized);
+        let settings = Settings {
+            start_minimized: true,
+            ..old
+        };
+        let restored: Settings =
+            serde_json::from_slice(&serde_json::to_vec(&settings).unwrap()).unwrap();
+        assert!(restored.start_minimized);
+    }
     #[test]
     fn existing_profiles_receive_preview_defaults() {
         let profile: Profile = serde_json::from_str(r#"{"watch":true,"desired":{}}"#).unwrap();

@@ -10,7 +10,7 @@ A Linux camera-control app built with Rust and Iced 0.14. No OBSBOT SDK is requi
 - Optional live preview with camera-supported resolution choices and a frame-rate selector up to 60 fps, plus a preview-only mirror toggle. Choices persist per camera. Enable it to inspect color changes; disable it to release capture for Meet or another app. Preview stops when hiding to the tray or changing cameras, and starts off when launching the app.
 - Optional settings watcher: checks every 500 ms and restores your chosen color settings. Settings are saved per camera.
 - Tray icon with Show, Hide and Quit. Closing the window hides it while the watcher continues. If the desktop has no working tray, the app keeps a visible window and closing it quits.
-- Configurable **Start at login**. Startup launches the tray app without a window; opening the app again shows the existing instance.
+- Configurable **Start at login** and **Start minimized**. Start minimized launches into the tray for ordinary launches and login startup. Opening the app again shows the existing instance. If the tray is unavailable, a window opens instead.
 
 Camera controls remain editable while watching. Unsupported controls are omitted. Preview uses native V4L2 capture, with MJPEG or YUYV decoding on a background thread, and keeps only the latest frame. Capture requests the chosen resolution and frame rate from the camera; the status line shows the requested rate, negotiated camera rate, and measured decoding rate. Rates up to 60 fps can be requested even when mode enumeration is incomplete. If a request is rejected, the app falls back to an advertised rate and reports what it actually achieved. A 60 fps selection cannot make a camera mode that is limited to 30 fps produce 60 distinct frames. There is no fixed 10 fps cap. Mirroring flips only the local preview and leaves the camera orientation used by other apps unchanged. Changing resolution or frame rate restarts capture; changing mirroring does not. A camera may need a second or two to wake or release capture.
 
@@ -27,7 +27,7 @@ cargo run -- --background
 cargo test
 ```
 
-`--list` reads camera information without changing settings. `--background` starts the app in the tray. Settings are stored at `$XDG_CONFIG_HOME/camera-control/settings.json` (normally `~/.config/camera-control/settings.json`). Watching is off by default for a new camera.
+`--list` reads camera information without changing settings. `--background` explicitly starts the app in the tray regardless of the saved **Start minimized** preference. Settings are stored at `$XDG_CONFIG_HOME/camera-control/settings.json` (normally `~/.config/camera-control/settings.json`). Watching is off by default for a new camera.
 
 The local installer adds an application-menu launcher and installs the binary in `~/.local/share/camera-control-iced/` (respecting `XDG_DATA_HOME`). Its `--autostart` option enables startup.
 

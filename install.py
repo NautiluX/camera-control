@@ -18,7 +18,7 @@ def quoted_exec(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('binary', type=Path, help='Path to the executable produced by cargo build')
-    parser.add_argument('--autostart', action='store_true', help='Start in the tray at login')
+    parser.add_argument('--autostart', action='store_true', help='Start at login using the saved window preference')
     args = parser.parse_args()
     if not args.binary.is_file():
         parser.error('The executable does not exist; build it first.')
@@ -52,7 +52,7 @@ def main():
     if args.autostart:
         startup.mkdir(parents=True, exist_ok=True)
     if args.autostart:
-        entry = entry.replace(f'Exec={quoted_exec(destination)}\n', f'Exec={quoted_exec(destination)} --background\n')
+        entry = entry.replace(f'Exec={quoted_exec(destination)}\n', f'Exec={quoted_exec(destination)} --autostart\n')
         (startup / 'camera-control-iced.desktop').write_text(entry + 'X-GNOME-Autostart-enabled=true\n')
     print(f'Installed: {destination}')
     print('Open Camera Control from your application menu.')

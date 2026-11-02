@@ -219,7 +219,7 @@ fn desktop_entry(executable: &Path) -> String {
     }
     argument.push('"');
     format!(
-        "[Desktop Entry]\nType=Application\nName=Camera Control\nComment=Keep camera color settings applied\nExec={argument} --background\nIcon=camera-control-iced\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
+        "[Desktop Entry]\nType=Application\nName=Camera Control\nComment=Keep camera color settings applied\nExec={argument} --autostart\nIcon=camera-control-iced\nTerminal=false\nX-GNOME-Autostart-enabled=true\n"
     )
 }
 pub fn set_start_at_login(enabled: bool) -> io::Result<()> {
@@ -240,9 +240,9 @@ pub fn set_start_at_login(enabled: bool) -> io::Result<()> {
 mod tests {
     use super::*;
     #[test]
-    fn autostart_quotes_paths_and_runs_the_tray_app() {
+    fn autostart_quotes_paths_and_respects_startup_preference() {
         let entry = desktop_entry(Path::new("/home/test/My Apps/camera%control"));
-        assert!(entry.contains("Exec=\"/home/test/My Apps/camera%%control\" --background\n"));
+        assert!(entry.contains("Exec=\"/home/test/My Apps/camera%%control\" --autostart\n"));
         assert!(!entry.contains("--watch"));
     }
     #[test]

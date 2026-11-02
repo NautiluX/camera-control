@@ -416,6 +416,11 @@ pub fn view(app: &App) -> Element<'_, Message> {
         .size(17)
         .text_size(13)
         .on_toggle(Message::StartAtLogin);
+    let minimized = checkbox(app.settings.start_minimized)
+        .label("Start minimized")
+        .size(17)
+        .text_size(13)
+        .on_toggle(Message::StartMinimized);
     let behavior = card(
         column![
             row![
@@ -434,6 +439,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
             watch,
             row![
                 startup,
+                minimized,
                 Space::new().width(Fill),
                 text(if app.tray_ready {
                     "Closing the window keeps the app in the tray."
