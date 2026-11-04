@@ -150,7 +150,6 @@ impl App {
         }
         let background = std::env::args().any(|argument| argument == "--background");
         let task = if (background || app.settings.start_minimized) && app.tray.is_some() {
-            app.tray_recovery.offline(Instant::now());
             Task::none()
         } else {
             app.show()
@@ -267,12 +266,15 @@ impl App {
                 }
             }
         };
+        // ksni reports initial unavailability through TrayOffline, but emits
+        // TrayOnline only when a previously absent watcher appears.
+        let tray_ready = tray.is_some();
         Self {
             desktop_events,
             _instance: instance,
             tray,
             duplicate,
-            tray_ready: false,
+            tray_ready,
             tray_recovery: desktop::TrayRecovery::default(),
             window: None,
             start_at_login: desktop::starts_at_login(),
