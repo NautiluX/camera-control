@@ -12,7 +12,7 @@ use iced::{Element, Subscription, Task, window};
 use settings::{Profile, Settings};
 use std::{
     sync::mpsc::{self, Receiver},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use worker::{Command, Event, Worker};
 
@@ -126,6 +126,7 @@ struct App {
     _instance: Option<desktop::Instance>,
     tray: Option<ksni::blocking::Handle<desktop::Tray>>,
     tray_ready: bool,
+    tray_recovery: desktop::TrayRecovery,
     window: Option<window::Id>,
     start_at_login: bool,
     desktop_error: Option<String>,
@@ -149,6 +150,7 @@ impl App {
         }
         let background = std::env::args().any(|argument| argument == "--background");
         let task = if (background || app.settings.start_minimized) && app.tray.is_some() {
+            app.tray_recovery.offline(Instant::now());
             Task::none()
         } else {
             app.show()
@@ -156,6 +158,10 @@ impl App {
         (app, task)
     }
     fn show(&mut self) -> Task<Message> {
+        self.tray_recovery.user_opened_window();
+        self.open_window()
+    }
+    fn open_window(&mut self) -> Task<Message> {
         if let Some(id) = self.window {
             return window::gain_focus(id);
         }
@@ -261,13 +267,13 @@ impl App {
                 }
             }
         };
-        let tray_ready = tray.is_some();
         Self {
             desktop_events,
             _instance: instance,
             tray,
             duplicate,
-            tray_ready,
+            tray_ready: false,
+            tray_recovery: desktop::TrayRecovery::default(),
             window: None,
             start_at_login: desktop::starts_at_login(),
             desktop_error,
@@ -335,17 +341,24 @@ impl App {
                     desktop::Action::TrayOnline => {
                         self.tray_ready = true;
                         self.desktop_error = None;
+                        if self.tray_recovery.online() {
+                            tasks.push(self.hide());
+                        }
                     }
                     desktop::Action::TrayOffline => {
                         self.tray_ready = false;
                         self.desktop_error = Some(
                             "No system tray is available. The app will keep a window open.".into(),
                         );
-                        if self.window.is_none() {
-                            tasks.push(self.show());
-                        }
+                        self.tray_recovery.offline(Instant::now());
                     }
                 }
+            }
+            if self
+                .tray_recovery
+                .needs_window(Instant::now(), self.window.is_some())
+            {
+                tasks.push(self.open_window());
             }
             if let Some(preview) = &self.preview {
                 let state = preview.poll();
@@ -387,7 +400,10 @@ impl App {
                 }
                 return self.hide();
             }
-            Message::WindowOpened(id) => self.window = Some(id),
+            Message::WindowOpened(_id) => {
+                // open_window() records the ID before opening asynchronously.
+                // Keep a late acknowledgement from undoing a hide request.
+            }
             Message::PreviewFrameReady(generation, result) => {
                 if generation != self.preview_generation || !self.preview_enabled {
                     return Task::none();

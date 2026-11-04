@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
     sync::mpsc::Sender,
     thread,
+    time::{Duration, Instant},
 };
 
 #[derive(Clone, Debug)]
@@ -26,6 +27,38 @@ pub enum Action {
     Quit,
     TrayOnline,
     TrayOffline,
+}
+
+/// Delay a fallback window while the desktop tray starts or restarts.
+#[derive(Default)]
+pub struct TrayRecovery {
+    unavailable_since: Option<Instant>,
+    automatic_window: bool,
+}
+impl TrayRecovery {
+    pub fn offline(&mut self, now: Instant) {
+        self.unavailable_since.get_or_insert(now);
+    }
+    pub fn online(&mut self) -> bool {
+        self.unavailable_since = None;
+        std::mem::take(&mut self.automatic_window)
+    }
+    pub fn user_opened_window(&mut self) {
+        self.automatic_window = false;
+    }
+    pub fn needs_window(&mut self, now: Instant, window_open: bool) -> bool {
+        if !window_open
+            && self.unavailable_since.is_some_and(|since| {
+                now.saturating_duration_since(since) >= Duration::from_secs(10)
+            })
+        {
+            self.unavailable_since = None;
+            self.automatic_window = true;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct Instance {
@@ -239,6 +272,36 @@ pub fn set_start_at_login(enabled: bool) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn minimized_start_waits_for_tray_at_login() {
+        let now = Instant::now();
+        let mut recovery = TrayRecovery::default();
+        recovery.offline(now);
+        assert!(!recovery.needs_window(now + Duration::from_secs(3), false));
+        assert!(!recovery.online());
+        assert!(!recovery.needs_window(now + Duration::from_secs(20), false));
+    }
+    #[test]
+    fn delayed_tray_hides_only_automatic_fallback_windows() {
+        let now = Instant::now();
+        let mut recovery = TrayRecovery::default();
+        recovery.offline(now);
+        recovery.offline(now + Duration::from_secs(9));
+        assert!(recovery.needs_window(now + Duration::from_secs(10), false));
+        assert!(recovery.online());
+        recovery.offline(now);
+        assert!(recovery.needs_window(now + Duration::from_secs(10), false));
+        recovery.user_opened_window();
+        assert!(!recovery.online());
+    }
+    #[test]
+    fn tray_restart_leaves_existing_user_window_open() {
+        let now = Instant::now();
+        let mut recovery = TrayRecovery::default();
+        recovery.offline(now);
+        assert!(!recovery.needs_window(now + Duration::from_secs(20), true));
+        assert!(!recovery.online());
+    }
     #[test]
     fn autostart_quotes_paths_and_respects_startup_preference() {
         let entry = desktop_entry(Path::new("/home/test/My Apps/camera%control"));
