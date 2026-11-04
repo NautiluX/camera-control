@@ -151,17 +151,16 @@ impl ksni::Tray for Tray {
         String::new()
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        // A small camera glyph, supplied as ARGB so no icon-theme dependency is needed.
+        // A monochrome camera silhouette with a transparent lens cutout.
+        // Supply ARGB pixels so no icon-theme dependency is needed.
         let mut pixels = vec![0; 32 * 32 * 4];
         for y in 0..32i32 {
             for x in 0..32i32 {
                 let body = (3..29).contains(&x) && (9..26).contains(&y);
                 let top = (9..18).contains(&x) && (6..10).contains(&y);
                 let lens = (x - 16).pow(2) + (y - 17).pow(2) <= 36;
-                let color = if lens {
-                    [255, 16, 129, 122]
-                } else if body || top {
-                    [255, 235, 247, 245]
+                let color = if (body || top) && !lens {
+                    [255, 240, 240, 240]
                 } else {
                     [0, 0, 0, 0]
                 };
