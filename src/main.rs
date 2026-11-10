@@ -44,8 +44,9 @@ fn main() -> iced::Result {
                 if flip::is_flip(&camera.path) {
                     match flip::snapshot(&camera.path) {
                         Ok(state) => println!(
-                            "  Auto framing: {}\n  Framing gesture: {}\n  Framing mode: {}\n  Zoom gesture: {}\n  Gesture zoom ratio: {:.1}×",
-                            state.auto_framing,
+                            "  Auto framing: {}\n  HDR: {}\n  Framing gesture: {}\n  Gesture framing mode: {}\n  Zoom gesture: {}\n  Gesture zoom ratio: {:.1}×",
+                            state.ai_mode,
+                            state.hdr,
                             state.framing_gesture,
                             state.framing_mode,
                             state.zoom_gesture,
@@ -143,6 +144,7 @@ struct App {
     flip_state: Option<flip::State>,
     flip_error: Option<String>,
     flip_zoom_draft: Option<u16>,
+    flip_hdr_ready_at: Option<Instant>,
     desktop_events: Receiver<desktop::Action>,
     _instance: Option<desktop::Instance>,
     tray: Option<ksni::blocking::Handle<desktop::Tray>>,
@@ -324,6 +326,7 @@ impl App {
             flip_state: None,
             flip_error: None,
             flip_zoom_draft: None,
+            flip_hdr_ready_at: None,
         }
     }
     fn profile(&self) -> Profile {
@@ -500,6 +503,15 @@ impl App {
                 }
             }
             Message::Flip(change) => {
+                if matches!(change, flip::Change::Hdr(_)) {
+                    if self
+                        .flip_hdr_ready_at
+                        .is_some_and(|time| Instant::now() < time)
+                    {
+                        return Task::none();
+                    }
+                    self.flip_hdr_ready_at = Some(Instant::now() + Duration::from_secs(3));
+                }
                 if let Some(camera) = &self.selected
                     && self.flip_supported
                 {

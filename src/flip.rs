@@ -32,8 +32,27 @@ impl std::fmt::Display for FramingMode {
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AiMode {
+    Off,
+    Group,
+    Single,
+}
+impl AiMode {
+    pub const ALL: [Self; 3] = [Self::Off, Self::Group, Self::Single];
+}
+impl std::fmt::Display for AiMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Off => "Off",
+            Self::Group => "Group framing",
+            Self::Single => "Single-person framing",
+        })
+    }
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct State {
-    pub auto_framing: bool,
+    pub ai_mode: AiMode,
+    pub hdr: bool,
     pub framing_gesture: bool,
     pub framing_mode: FramingMode,
     pub zoom_gesture: bool,
@@ -41,7 +60,8 @@ pub struct State {
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Change {
-    AutoFraming(bool),
+    AiMode(AiMode),
+    Hdr(bool),
     FramingGesture(bool),
     FramingMode(FramingMode),
     ZoomGesture(bool),
@@ -58,7 +78,19 @@ impl State {
             return Err(io::Error::other("Unsupported Flip gesture zoom range"));
         }
         Ok(Self {
-            auto_framing: data[24] != 0,
+            ai_mode: match data[24] {
+                0 => AiMode::Off,
+                1 => AiMode::Group,
+                2 => AiMode::Single,
+                6 => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::WouldBlock,
+                        "AI mode is switching",
+                    ));
+                }
+                _ => return Err(io::Error::other("Unknown Flip AI mode")),
+            },
+            hdr: data[6] != 0,
             framing_gesture: word & 1 != 0,
             framing_mode: FramingMode::ALL[((word >> 1) & 3) as usize],
             zoom_gesture: word & 8 != 0,
@@ -67,7 +99,8 @@ impl State {
     }
     pub fn changed(mut self, change: Change) -> io::Result<Self> {
         match change {
-            Change::AutoFraming(value) => self.auto_framing = value,
+            Change::AiMode(value) => self.ai_mode = value,
+            Change::Hdr(value) => self.hdr = value,
             Change::FramingGesture(value) => self.framing_gesture = value,
             Change::FramingMode(value) => self.framing_mode = value,
             Change::ZoomGesture(value) => self.zoom_gesture = value,
@@ -77,12 +110,18 @@ impl State {
         Ok(self)
     }
     fn payload(self, change: Change) -> [u8; 60] {
-        if let Change::AutoFraming(_) = change {
+        if let Change::Hdr(_) = change {
+            let mut data = [0; 60];
+            data[..2].copy_from_slice(&0x0101u16.to_le_bytes());
+            data[2] = self.hdr.into();
+            return data;
+        }
+        if let Change::AiMode(_) = change {
             let mut data = [0; 60];
             data[..2].copy_from_slice(&0x0216u16.to_le_bytes());
-            // 0 = standard mode; 1 = group auto framing. Byte 3 is the
-            // command source for these modes (0 = normal software control).
-            data[2] = self.auto_framing.into();
+            // 0 = off, 1 = group, 2 = single. Byte 3 is zero: software
+            // command source for off/group, normal view for single framing.
+            data[2] = self.ai_mode as u8;
             return data;
         }
         self.gesture_payload()
@@ -160,9 +199,20 @@ fn open(path: &Path) -> io::Result<File> {
     Ok(file)
 }
 fn read(file: &File) -> io::Result<State> {
-    let mut data = [0; 60];
-    query(file, 0x81, &mut data)?;
-    State::decode(&data)
+    for _ in 0..80 {
+        let mut data = [0; 60];
+        query(file, 0x81, &mut data)?;
+        match State::decode(&data) {
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            result => return result,
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::TimedOut,
+        "AI mode is still switching",
+    ))
 }
 pub fn snapshot(path: &Path) -> io::Result<State> {
     read(&open(path)?)
@@ -176,7 +226,13 @@ pub fn apply(path: &Path, change: Change) -> io::Result<State> {
         return Ok(current);
     }
     query(&file, 0x01, &mut desired.payload(change))?;
-    for _ in 0..10 {
+    // HDR can take several seconds to settle after switching sensor mode.
+    let attempts = if matches!(change, Change::Hdr(_)) {
+        80
+    } else {
+        10
+    };
+    for _ in 0..attempts {
         thread::sleep(Duration::from_millis(50));
         if read(&file)? == desired {
             return Ok(desired);
@@ -225,20 +281,49 @@ mod tests {
         let mut data = status(0x0c84);
         data[24] = 1;
         let active = State::decode(&data).unwrap();
-        assert!(active.auto_framing);
+        assert_eq!(active.ai_mode, AiMode::Group);
         assert!(!active.framing_gesture);
-        let off = active.changed(Change::AutoFraming(false)).unwrap();
-        assert!(!off.auto_framing);
+        let off = active.changed(Change::AiMode(AiMode::Off)).unwrap();
+        assert_eq!(off.ai_mode, AiMode::Off);
         assert_eq!(off.gesture_payload(), active.gesture_payload());
-        let off_payload = off.payload(Change::AutoFraming(false));
+        let off_payload = off.payload(Change::AiMode(AiMode::Off));
         assert_eq!(&off_payload[..4], &[0x16, 0x02, 0, 0]);
         assert!(off_payload[4..].iter().all(|&byte| byte == 0));
-        let on_payload = active.payload(Change::AutoFraming(true));
+        let on_payload = active.payload(Change::AiMode(AiMode::Group));
         assert_eq!(&on_payload[..4], &[0x16, 0x02, 1, 0]);
         data[24] = 0;
         assert_eq!(State::decode(&data).unwrap(), off);
+        data[24] = 6;
+        assert_eq!(
+            State::decode(&data).unwrap_err().kind(),
+            io::ErrorKind::WouldBlock
+        );
         data[24] = 2;
-        assert!(State::decode(&data).unwrap().auto_framing);
+        assert_eq!(State::decode(&data).unwrap().ai_mode, AiMode::Single);
+        let single = off.changed(Change::AiMode(AiMode::Single)).unwrap();
+        assert_eq!(
+            &single.payload(Change::AiMode(AiMode::Single))[..4],
+            &[0x16, 0x02, 2, 0]
+        );
+    }
+    #[test]
+    fn hdr_commands_preserve_ai_and_gesture_preferences() {
+        let mut data = status(0x0c84);
+        data[24] = 1;
+        let off = State::decode(&data).unwrap();
+        assert!(!off.hdr);
+        let on = off.changed(Change::Hdr(true)).unwrap();
+        data[6] = 1;
+        assert_eq!(State::decode(&data).unwrap(), on);
+        assert_eq!(on.gesture_payload(), off.gesture_payload());
+        assert_eq!(on.ai_mode, off.ai_mode);
+        assert_eq!(&on.payload(Change::Hdr(true))[..3], &[1, 1, 1]);
+        assert_eq!(&off.payload(Change::Hdr(false))[..3], &[1, 1, 0]);
+        assert!(
+            on.payload(Change::Hdr(true))[3..]
+                .iter()
+                .all(|&byte| byte == 0)
+        );
     }
     #[test]
     fn reject_unknown_status_and_invalid_zoom() {

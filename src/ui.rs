@@ -4,7 +4,7 @@
 use crate::{
     App, Message,
     camera::{AUTO_WB, BRIGHTNESS, CONTRAST, Control, SATURATION, TEMPERATURE},
-    flip::{Change, FramingMode},
+    flip::{AiMode, Change, FramingMode},
 };
 use iced::{
     Border, Color, Element, Fill, Font, Length, Shadow, Theme, Vector, font,
@@ -461,16 +461,27 @@ pub fn view(app: &App) -> Element<'_, Message> {
             column![section_label("MEET FLIP"), strong("Framing & gestures", 22),].spacing(13);
         if let Some(state) = app.flip_state {
             let ratio = app.flip_zoom_draft.unwrap_or(state.zoom_percent);
+            let mut hdr = checkbox(state.hdr).label("HDR");
+            if app
+                .flip_hdr_ready_at
+                .is_none_or(|time| std::time::Instant::now() >= time)
+            {
+                hdr = hdr.on_toggle(|enabled| Message::Flip(Change::Hdr(enabled)));
+            }
             controls = controls
+                .push(hdr)
                 .push(
-                    checkbox(state.auto_framing)
-                        .label("Auto framing")
-                        .on_toggle(|enabled| Message::Flip(Change::AutoFraming(enabled))),
-                )
-                .push(
-                    text("Automatically keep everyone in frame.")
-                        .size(12)
-                        .color(MUTED),
+                    row![
+                        text("Auto framing").size(14).width(150),
+                        pick_list(AiMode::ALL, Some(state.ai_mode), |mode| Message::Flip(
+                            Change::AiMode(mode)
+                        ))
+                        .padding(10)
+                        .width(260)
+                        .style(picker_style),
+                    ]
+                    .spacing(14)
+                    .align_y(iced::Center),
                 )
                 .push(
                     checkbox(state.framing_gesture)
@@ -479,7 +490,7 @@ pub fn view(app: &App) -> Element<'_, Message> {
                 )
                 .push(
                     row![
-                        text("Framing mode").size(14).width(150),
+                        text("Gesture framing").size(14).width(150),
                         pick_list(FramingMode::ALL, Some(state.framing_mode), |mode| {
                             Message::Flip(Change::FramingMode(mode))
                         })

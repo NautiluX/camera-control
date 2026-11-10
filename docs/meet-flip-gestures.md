@@ -70,17 +70,33 @@ has been installed.
 ## Active auto framing (separate from gestures)
 
 Status byte 24 is the active AI mode: 0 = standard mode, 1 = group framing,
-2 = single-person framing. A nonzero value is displayed as Auto framing enabled.
+2 = single-person framing. The utility displays Off, Group framing or Single-person framing. Mode 6 is a transient switching state; the adapter waits for it to settle.
 Turning off framing gestures does not stop auto framing that is already running.
 
 The active switch uses selector 6, `SET_CUR`, 60 bytes:
 `16 02 <mode> 00`, followed by zero padding. This was reconstructed from
-`Device::cameraSetAiModeU`. The utility writes mode 0 for off and mode 1 for on
-(group framing). The fourth byte is the command source for these modes:
-0 means normal software control. It is not a gesture setting.
+`Device::cameraSetAiModeU`. The utility writes mode 0 for off, mode 1 for group framing, and mode 2 for
+single-person framing. The fourth byte is 0: normal software command source for
+off/group, or normal view for single-person framing. It is not a gesture setting.
+All three modes have been confirmed by status readback on the Flip.
 
 On the tested Flip, switching off changed active mode byte 24 from 1 to 0,
 AI submode byte 28 from 1 to 0, and boot mode byte 32 from 17 to 0. The gesture
 word stayed unchanged. Thus this firmware also updates its reported boot mode;
 persistence across a physical unplug has not been tested. Auto-framing changes
 are verified by status readback independently of the LED color.
+
+## HDR
+
+HDR state is status byte 6 (0 = off, 1 = on). The SDK's `cameraSetWdrR` uses
+the same direct extension control for this device family: selector 6,
+`SET_CUR`, 60 bytes, starting `01 01 <enabled>`, zero-padded.
+This is distinct from the framed WDR command used by some other models.
+
+Native Rust on/off round trips were verified on the Flip; AI mode and gesture
+preferences were preserved. The SDK recommends at least three seconds between
+HDR switches because sensor reconfiguration takes time. The UI enforces that
+interval and the adapter allows up to four seconds for HDR readback to settle.
+Firmware may restrict HDR at particular video formats; a failed readback is
+reported instead of assuming success. Preview remains optional and is not
+started by these controls.
