@@ -463,6 +463,16 @@ pub fn view(app: &App) -> Element<'_, Message> {
             let ratio = app.flip_zoom_draft.unwrap_or(state.zoom_percent);
             controls = controls
                 .push(
+                    checkbox(state.auto_framing)
+                        .label("Auto framing")
+                        .on_toggle(|enabled| Message::Flip(Change::AutoFraming(enabled))),
+                )
+                .push(
+                    text("Automatically keep everyone in frame.")
+                        .size(12)
+                        .color(MUTED),
+                )
+                .push(
                     checkbox(state.framing_gesture)
                         .label("Framing gestures")
                         .on_toggle(|enabled| Message::Flip(Change::FramingGesture(enabled))),

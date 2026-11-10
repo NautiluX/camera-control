@@ -66,3 +66,21 @@ Confirmed: camera status readback and preservation of adjacent settings.
 Not yet tested: physical gesture behavior, persistence across USB reconnect or
 power loss, and support on other firmware versions. No automatic reapply loop
 has been installed.
+
+## Active auto framing (separate from gestures)
+
+Status byte 24 is the active AI mode: 0 = standard mode, 1 = group framing,
+2 = single-person framing. A nonzero value is displayed as Auto framing enabled.
+Turning off framing gestures does not stop auto framing that is already running.
+
+The active switch uses selector 6, `SET_CUR`, 60 bytes:
+`16 02 <mode> 00`, followed by zero padding. This was reconstructed from
+`Device::cameraSetAiModeU`. The utility writes mode 0 for off and mode 1 for on
+(group framing). The fourth byte is the command source for these modes:
+0 means normal software control. It is not a gesture setting.
+
+On the tested Flip, switching off changed active mode byte 24 from 1 to 0,
+AI submode byte 28 from 1 to 0, and boot mode byte 32 from 17 to 0. The gesture
+word stayed unchanged. Thus this firmware also updates its reported boot mode;
+persistence across a physical unplug has not been tested. Auto-framing changes
+are verified by status readback independently of the LED color.

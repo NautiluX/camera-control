@@ -33,6 +33,7 @@ impl std::fmt::Display for FramingMode {
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct State {
+    pub auto_framing: bool,
     pub framing_gesture: bool,
     pub framing_mode: FramingMode,
     pub zoom_gesture: bool,
@@ -40,6 +41,7 @@ pub struct State {
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Change {
+    AutoFraming(bool),
     FramingGesture(bool),
     FramingMode(FramingMode),
     ZoomGesture(bool),
@@ -56,6 +58,7 @@ impl State {
             return Err(io::Error::other("Unsupported Flip gesture zoom range"));
         }
         Ok(Self {
+            auto_framing: data[24] != 0,
             framing_gesture: word & 1 != 0,
             framing_mode: FramingMode::ALL[((word >> 1) & 3) as usize],
             zoom_gesture: word & 8 != 0,
@@ -64,6 +67,7 @@ impl State {
     }
     pub fn changed(mut self, change: Change) -> io::Result<Self> {
         match change {
+            Change::AutoFraming(value) => self.auto_framing = value,
             Change::FramingGesture(value) => self.framing_gesture = value,
             Change::FramingMode(value) => self.framing_mode = value,
             Change::ZoomGesture(value) => self.zoom_gesture = value,
@@ -72,7 +76,18 @@ impl State {
         }
         Ok(self)
     }
-    fn payload(self) -> [u8; 60] {
+    fn payload(self, change: Change) -> [u8; 60] {
+        if let Change::AutoFraming(_) = change {
+            let mut data = [0; 60];
+            data[..2].copy_from_slice(&0x0216u16.to_le_bytes());
+            // 0 = standard mode; 1 = group auto framing. Byte 3 is the
+            // command source for these modes (0 = normal software control).
+            data[2] = self.auto_framing.into();
+            return data;
+        }
+        self.gesture_payload()
+    }
+    fn gesture_payload(self) -> [u8; 60] {
         let mut data = [0; 60];
         data[..2].copy_from_slice(&0x0520u16.to_le_bytes());
         data[2] = self.framing_gesture.into();
@@ -160,7 +175,7 @@ pub fn apply(path: &Path, change: Change) -> io::Result<State> {
     if desired == current {
         return Ok(current);
     }
-    query(&file, 0x01, &mut desired.payload())?;
+    query(&file, 0x01, &mut desired.payload(change))?;
     for _ in 0..10 {
         thread::sleep(Duration::from_millis(50));
         if read(&file)? == desired {
@@ -168,7 +183,7 @@ pub fn apply(path: &Path, change: Change) -> io::Result<State> {
         }
     }
     Err(io::Error::other(
-        "The camera did not confirm the gesture setting. Refresh to read its state.",
+        "The camera did not confirm the Flip setting. Refresh to read its state.",
     ))
 }
 
@@ -190,14 +205,40 @@ mod tests {
         assert_eq!(framing_off, State::decode(&status(0x0c8c)).unwrap());
         let both_off = framing_off.changed(Change::ZoomGesture(false)).unwrap();
         assert_eq!(both_off, State::decode(&status(0x0c84)).unwrap());
-        assert_eq!(&both_off.payload()[..7], &[0x20, 0x05, 0, 2, 0, 200, 0]);
+        assert_eq!(
+            &both_off.gesture_payload()[..7],
+            &[0x20, 0x05, 0, 2, 0, 200, 0]
+        );
         let changed = both_off
             .changed(Change::FramingMode(FramingMode::FullBody))
             .unwrap()
             .changed(Change::ZoomRatio(400))
             .unwrap();
-        assert_eq!(&changed.payload()[..7], &[0x20, 0x05, 0, 3, 0, 144, 1]);
-        assert!(changed.payload()[7..].iter().all(|&byte| byte == 0));
+        assert_eq!(
+            &changed.gesture_payload()[..7],
+            &[0x20, 0x05, 0, 3, 0, 144, 1]
+        );
+        assert!(changed.gesture_payload()[7..].iter().all(|&byte| byte == 0));
+    }
+    #[test]
+    fn active_framing_is_separate_from_gesture_recognition() {
+        let mut data = status(0x0c84);
+        data[24] = 1;
+        let active = State::decode(&data).unwrap();
+        assert!(active.auto_framing);
+        assert!(!active.framing_gesture);
+        let off = active.changed(Change::AutoFraming(false)).unwrap();
+        assert!(!off.auto_framing);
+        assert_eq!(off.gesture_payload(), active.gesture_payload());
+        let off_payload = off.payload(Change::AutoFraming(false));
+        assert_eq!(&off_payload[..4], &[0x16, 0x02, 0, 0]);
+        assert!(off_payload[4..].iter().all(|&byte| byte == 0));
+        let on_payload = active.payload(Change::AutoFraming(true));
+        assert_eq!(&on_payload[..4], &[0x16, 0x02, 1, 0]);
+        data[24] = 0;
+        assert_eq!(State::decode(&data).unwrap(), off);
+        data[24] = 2;
+        assert!(State::decode(&data).unwrap().auto_framing);
     }
     #[test]
     fn reject_unknown_status_and_invalid_zoom() {

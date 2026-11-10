@@ -44,7 +44,8 @@ fn main() -> iced::Result {
                 if flip::is_flip(&camera.path) {
                     match flip::snapshot(&camera.path) {
                         Ok(state) => println!(
-                            "  Framing gesture: {}\n  Framing mode: {}\n  Zoom gesture: {}\n  Gesture zoom ratio: {:.1}×",
+                            "  Auto framing: {}\n  Framing gesture: {}\n  Framing mode: {}\n  Zoom gesture: {}\n  Gesture zoom ratio: {:.1}×",
+                            state.auto_framing,
                             state.framing_gesture,
                             state.framing_mode,
                             state.zoom_gesture,
