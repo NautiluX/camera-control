@@ -8,6 +8,7 @@ A Linux camera-control app built with Rust and Iced 0.14. No OBSBOT SDK is requi
 - White-balance presets: Tungsten (3200 K), Fluorescent (4200 K), Daylight (5500 K), Cloudy (6500 K), and Shade (7500 K). These are convenient approximate color-temperature settings, not manufacturer-specific scene modes. The existing slider remains available for fine-tuning.
 - Automatic white balance, plus brightness, contrast and saturation where supported.
 - Optional live preview with camera-supported resolution choices and a frame-rate selector up to 60 fps, plus a preview-only mirror toggle. Choices persist per camera. Enable it to inspect color changes; disable it to release capture for Meet or another app. Preview stops when hiding to the tray or changing cameras, and starts off when launching the app.
+- Meet Flip controls shown only for USB `3564:ff06`: framing and zoom gesture switches, framing mode (Auto, Close-up, Half body, Full body), and gesture zoom ratio from 1× to 4× in 0.1× steps. Each edit preserves the other live settings and is verified by camera readback. These controls read the device directly and are independent of color enforcement; reconnect persistence depends on firmware.
 - Optional settings watcher: checks every 500 ms and restores your chosen color settings. Settings are saved per camera.
 - Tray icon with Show, Hide and Quit. Closing the window hides it while the watcher continues. If the desktop has no working tray, the app keeps a visible window and closing it quits.
 - Configurable **Start at login** and **Start minimized**. Start minimized launches into the tray for ordinary launches and login startup. Opening the app again shows the existing instance. The app waits up to 10 seconds for the tray at login. If it remains unavailable, a fallback window opens and hides automatically when the tray connects; a window you explicitly open stays visible.
@@ -51,9 +52,10 @@ CAMERA_CONTROL_TEST_CAMERA=/dev/v4l/by-id/YOUR_CAMERA-video-index0 \
 
 ## SDK integration
 
-No vendor headers or binaries are included. Keep any future OBSBOT SDK outside the repository. A future adapter can accept a local SDK path after its implementation and camera support are verified. Gestures and other OBSBOT-specific functions are not implemented yet.
+No vendor headers or binaries are included. Keep any future OBSBOT SDK outside the repository. A future adapter can accept a local SDK path after its implementation and camera support are verified. Meet Flip gesture controls use a small native UVC adapter, with no vendor SDK dependency. Other vendor-specific functions are not implemented. See [the measured Flip protocol](docs/meet-flip-gestures.md).
 
 - `src/camera.rs`: standard V4L2 color controls.
+- `src/flip.rs`: device-gated Meet Flip gestures, framing mode and gesture zoom ratio.
 - `src/preview.rs`: optional capture and frame decoding.
 - `src/worker.rs`: camera I/O and settings watcher.
 - `src/settings.rs`: saved profiles.

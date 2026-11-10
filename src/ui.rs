@@ -4,6 +4,7 @@
 use crate::{
     App, Message,
     camera::{AUTO_WB, BRIGHTNESS, CONTRAST, Control, SATURATION, TEMPERATURE},
+    flip::{Change, FramingMode},
 };
 use iced::{
     Border, Color, Element, Fill, Font, Length, Shadow, Theme, Vector, font,
@@ -454,7 +455,67 @@ pub fn view(app: &App) -> Element<'_, Message> {
         ]
         .spacing(13),
     );
-    let mut content = column![header, device, preview_panel, panels, behavior].spacing(18);
+    let mut content = column![header, device, preview_panel, panels].spacing(18);
+    if app.flip_supported {
+        let mut controls =
+            column![section_label("MEET FLIP"), strong("Framing & gestures", 22),].spacing(13);
+        if let Some(state) = app.flip_state {
+            let ratio = app.flip_zoom_draft.unwrap_or(state.zoom_percent);
+            controls = controls
+                .push(
+                    checkbox(state.framing_gesture)
+                        .label("Framing gestures")
+                        .on_toggle(|enabled| Message::Flip(Change::FramingGesture(enabled))),
+                )
+                .push(
+                    row![
+                        text("Framing mode").size(14).width(150),
+                        pick_list(FramingMode::ALL, Some(state.framing_mode), |mode| {
+                            Message::Flip(Change::FramingMode(mode))
+                        })
+                        .padding(10)
+                        .width(220)
+                        .style(picker_style),
+                    ]
+                    .align_y(iced::Center)
+                    .spacing(14),
+                )
+                .push(
+                    checkbox(state.zoom_gesture)
+                        .label("Zoom gestures")
+                        .on_toggle(|enabled| Message::Flip(Change::ZoomGesture(enabled))),
+                )
+                .push(
+                    row![
+                        text("Gesture zoom ratio").size(14).width(150),
+                        slider(100u16..=400, ratio, Message::FlipZoomRatio)
+                            .step(10u16)
+                            .on_release(Message::FlipZoomRatioApply),
+                        text(format!("{:.1}×", f32::from(ratio) / 100.0))
+                            .size(15)
+                            .width(55),
+                    ]
+                    .spacing(14)
+                    .align_y(iced::Center),
+                )
+                .push(
+                    text("Zoom ratio sets the magnification triggered by a zoom gesture.")
+                        .size(12)
+                        .color(MUTED),
+                );
+        } else if app.flip_error.is_none() {
+            controls = controls.push(text("Reading camera settings…").size(13).color(MUTED));
+        }
+        if let Some(error) = &app.flip_error {
+            controls = controls.push(
+                text(format!("Could not update Flip controls: {error}"))
+                    .size(13)
+                    .color(Color::from_rgb8(159, 71, 38)),
+            );
+        }
+        content = content.push(card(controls));
+    }
+    content = content.push(behavior);
     for error in [&app.error, &app.config_error, &app.desktop_error]
         .into_iter()
         .flatten()

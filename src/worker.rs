@@ -15,10 +15,17 @@ pub enum Command {
     Scan,
     Select(Camera, Profile, u64),
     Update(Profile, u64, bool),
+    Flip(PathBuf, crate::flip::Change, u64),
     Stop,
 }
 pub enum Event {
     Cameras(Vec<Camera>),
+    FlipSnapshot {
+        path: PathBuf,
+        revision: u64,
+        result: Result<crate::flip::State, String>,
+        write_error: Option<String>,
+    },
     PreviewModes {
         path: PathBuf,
         result: Result<Vec<crate::preview::Mode>, String>,
@@ -43,6 +50,7 @@ impl Worker {
             let mut profile = Profile::default();
             let mut revision = 0;
             let mut dirty = false;
+            let mut flip_write_error = None;
             let mut corrections = 0;
             let mut next_check = Instant::now();
             let mut next_scan = Instant::now() + Duration::from_secs(3);
@@ -55,6 +63,7 @@ impl Worker {
                     }
                     Ok(Command::Select(camera, desired, generation)) => {
                         selected = Some(camera);
+                        flip_write_error = None;
                         profile = desired;
                         revision = generation;
                         corrections = 0;
@@ -75,6 +84,15 @@ impl Worker {
                         dirty = apply;
                         next_check = Instant::now();
                     }
+                    Ok(Command::Flip(path, change, generation)) => {
+                        if selected.as_ref().is_some_and(|camera| camera.path == path) {
+                            revision = generation;
+                            flip_write_error = crate::flip::apply(&path, change)
+                                .err()
+                                .map(|error| error.to_string());
+                            next_check = Instant::now();
+                        }
+                    }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                 }
                 if Instant::now() >= next_scan {
@@ -90,6 +108,15 @@ impl Worker {
                 }
                 if dirty || Instant::now() >= next_check {
                     if let Some(camera) = &selected {
+                        if crate::flip::is_flip(&camera.path) {
+                            let _ = events_tx.send(Event::FlipSnapshot {
+                                path: camera.path.clone(),
+                                revision,
+                                result: crate::flip::snapshot(&camera.path)
+                                    .map_err(|error| error.to_string()),
+                                write_error: flip_write_error.clone(),
+                            });
+                        }
                         let result = if dirty || profile.watch {
                             camera::apply(&camera.path, &profile.desired).map(|count| {
                                 corrections += count;

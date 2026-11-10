@@ -3,6 +3,7 @@
 
 mod camera;
 mod desktop;
+mod flip;
 mod preview;
 mod settings;
 mod ui;
@@ -39,6 +40,18 @@ fn main() -> iced::Result {
                         }
                     }
                     Err(error) => eprintln!("  {error}"),
+                }
+                if flip::is_flip(&camera.path) {
+                    match flip::snapshot(&camera.path) {
+                        Ok(state) => println!(
+                            "  Framing gesture: {}\n  Framing mode: {}\n  Zoom gesture: {}\n  Gesture zoom ratio: {:.1}×",
+                            state.framing_gesture,
+                            state.framing_mode,
+                            state.zoom_gesture,
+                            f32::from(state.zoom_percent) / 100.0,
+                        ),
+                        Err(error) => eprintln!("  Flip settings: {error}"),
+                    }
                 }
             }
             return Ok(());
@@ -96,6 +109,9 @@ enum Message {
     Value(u32, i32),
     Watch(bool),
     Preset(i32),
+    Flip(flip::Change),
+    FlipZoomRatio(u16),
+    FlipZoomRatioApply,
     Preview(bool),
     PreviewFrameReady(
         u64,
@@ -122,6 +138,10 @@ struct App {
     error: Option<String>,
     config_error: Option<String>,
     corrections: usize,
+    flip_supported: bool,
+    flip_state: Option<flip::State>,
+    flip_error: Option<String>,
+    flip_zoom_draft: Option<u16>,
     desktop_events: Receiver<desktop::Action>,
     _instance: Option<desktop::Instance>,
     tray: Option<ksni::blocking::Handle<desktop::Tray>>,
@@ -299,6 +319,10 @@ impl App {
             error: None,
             config_error,
             corrections: 0,
+            flip_supported: false,
+            flip_state: None,
+            flip_error: None,
+            flip_zoom_draft: None,
         }
     }
     fn profile(&self) -> Profile {
@@ -324,6 +348,10 @@ impl App {
         self.controls.clear();
         self.error = None;
         self.corrections = 0;
+        self.flip_supported = flip::is_flip(&camera.path);
+        self.flip_state = None;
+        self.flip_error = None;
+        self.flip_zoom_draft = None;
         self.settings.selected = Some(camera.path.clone());
         self.selected = Some(camera.clone());
         let _ = self
@@ -470,6 +498,25 @@ impl App {
                     self.persist();
                 }
             }
+            Message::Flip(change) => {
+                if let Some(camera) = &self.selected
+                    && self.flip_supported
+                {
+                    self.revision += 1;
+                    self.flip_error = None;
+                    let _ = self.worker.commands.send(Command::Flip(
+                        camera.path.clone(),
+                        change,
+                        self.revision,
+                    ));
+                }
+            }
+            Message::FlipZoomRatio(value) => self.flip_zoom_draft = Some(value),
+            Message::FlipZoomRatioApply => {
+                if let Some(value) = self.flip_zoom_draft.take() {
+                    return self.update(Message::Flip(flip::Change::ZoomRatio(value)));
+                }
+            }
             Message::StartMinimized(enabled) => {
                 // Refresh legacy login entries that forced --background, so this
                 // preference controls login startup as well as ordinary launches.
@@ -528,6 +575,28 @@ impl App {
             Message::Tick => {
                 while let Ok(event) = self.worker.events.try_recv() {
                     match event {
+                        Event::FlipSnapshot {
+                            path,
+                            revision,
+                            result,
+                            write_error,
+                        } => {
+                            if self.selected.as_ref().map(|camera| &camera.path) != Some(&path)
+                                || revision != self.revision
+                            {
+                                continue;
+                            }
+                            match result {
+                                Ok(state) => {
+                                    self.flip_state = Some(state);
+                                    self.flip_error = write_error;
+                                }
+                                Err(error) => {
+                                    self.flip_state = None;
+                                    self.flip_error = Some(error);
+                                }
+                            }
+                        }
                         Event::PreviewModes { path, result } => {
                             if self.selected.as_ref().map(|c| &c.path) != Some(&path) {
                                 continue;
@@ -546,6 +615,10 @@ impl App {
                         }
                         Event::Cameras(cameras) => {
                             self.cameras = cameras;
+                            self.flip_supported = self
+                                .selected
+                                .as_ref()
+                                .is_some_and(|camera| flip::is_flip(&camera.path));
                             if let Some(selected) = &mut self.selected {
                                 if let Some(found) =
                                     self.cameras.iter().find(|c| c.path == selected.path)
